@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frigo Intelligente</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cabin+Sketch:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Cabin Sketch', cursive, 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+
+        .fridge-container {
+            position: relative;
+            width: 90%;
+            max-width: 350px;
+            height: 500px;
+            background-color: #a2c5e0;
+            border: 4px solid #b0c9e8;
+            border-radius: 1.5rem;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.1), 0 10px 20px rgba(0, 0, 0, 0.2);
+            z-index: 2;
+            overflow: hidden;
+        }
+
+        .fridge-door {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #a2c5e0;
+            border-radius: 1.5rem;
+            transform-origin: left;
+            transition: transform 0.5s ease-in-out;
+            z-index: 3;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+        }
+
+        .fridge-door.open {
+            transform: perspective(1000px) rotateY(-90deg);
+        }
+
+        .handle {
+            position: absolute;
+            right: 0.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 1.5rem;
+            height: 8rem;
+            background-color: #b0c9e8;
+            border-radius: 0.5rem;
+            box-shadow: inset 2px 2px 5px rgba(255, 255, 255, 0.5), inset -2px -2px 5px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            z-index: 5; /* Kept on top of everything */
+        }
+
+        .fridge-interior {
+            width: 100%;
+            height: 100%;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            transition: opacity 0.5s ease-in-out;
+        }
+
+        .fridge-interior.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .fridge-light {
+            position: absolute;
+            top: 0.5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 4rem;
+            height: 2rem;
+            background-color: #ffffff;
+            border-radius: 50%;
+            box-shadow: 0 0 15px 5px rgba(255, 255, 150, 0.8);
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+            z-index: 1;
+        }
+
+        .fridge-light.on {
+            opacity: 1;
+        }
+
+        .item-list-container {
+            background-color: rgba(229, 231, 235, 0.85);
+            border-radius: 0.75rem;
+            padding: 0.5rem;
+            flex-grow: 1;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #a2c5e0 #e5e7eb;
+        }
+        
+        .item-list-container::-webkit-scrollbar { width: 8px; }
+        .item-list-container::-webkit-scrollbar-track { background: #e5e7eb; border-radius: 10px; }
+        .item-list-container::-webkit-scrollbar-thumb { background-color: #a2c5e0; border-radius: 10px; border: 2px solid #e5e7eb; }
+
+        .shelf { 
+            display: flex; 
+            flex-direction: column;
+            gap: 0.5rem; 
+        }
+
+        .food-item {
+            width: 100%;
+            height: auto;
+            padding: 0.75rem;
+            background-color: #f7fafc;
+            border-radius: 0.75rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s, background-color 0.2s;
+            border: 3px solid transparent;
+        }
+
+        .food-item.selected {
+            box-shadow: 0 0 0 3px #3b82f6;
+        }
+
+        .food-item:hover { transform: translateY(-2px); }
+        .food-item.expired { background-color: #ffcccc; border-color: #ef4444; }
+        .food-item.expiring-today { background-color: #fed7aa; border-color: #fb923c; }
+        .food-item.expiring-soon { background-color: #fefcbf; border-color: #facc15; }
+        .food-item.fresh { background-color: #dcfce7; border-color: #4ade80; }
+        
+        .btn {
+            padding: 0.75rem 1.5rem; background-color: #60a5fa; color: white; border-radius: 9999px;
+            font-weight: bold; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); transition: background-color 0.3s;
+            display: flex; align-items: center; justify-content: center;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn:hover { background-color: #3b82f6; }
+
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.6); backdrop-filter: blur(5px);
+            display: none; justify-content: center; align-items: center; z-index: 1000;
+        }
+        .modal-content {
+            background-color: #fff; padding: 2rem; border-radius: 1rem;
+            width: 90%; max-width: 600px; box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+            max-height: 80vh; overflow-y: auto;
+        }
+        .modal-header {
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid #e2e8f0; padding-bottom: 1rem; margin-bottom: 1rem;
+        }
+        .close-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; }
+        .advice-box { background-color: #f7fafc; border-left: 4px solid #4299e1; padding: 1rem; border-radius: 0.5rem; }
+        .recipe-box { background-color: #f7fafc; border-left: 4px solid #48bb78; padding: 1rem; border-radius: 0.5rem; }
+        
+        .loading {
+            border: 4px solid rgba(0, 0, 0, 0.3); border-radius: 50%;
+            border-top: 4px solid #333; width: 36px; height: 36px; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .message-box {
+            background-color: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            text-align: center; max-width: 300px; display: none; position: fixed;
+            top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2000;
+        }
+
+        #lang-switch-btn, #api-settings-btn, #info-btn { transition: transform 0.2s; }
+        #lang-switch-btn:hover, #api-settings-btn:hover, #info-btn:hover { transform: scale(1.1); }
+        
+        .modal-content input[type="date"] {
+            position: relative;
+        }
+
+        #notification-light {
+            width: 32px; height: 32px; border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 8px rgba(0,0,0,0.2);
+            transition: background-color 0.3s, opacity 0.3s;
+            opacity: 0;
+        }
+        #notification-light.on { opacity: 1; }
+
+        .blink-red { background-color: #ef4444; animation: blink 1s infinite; }
+        .blink-orange { background-color: #fb923c; animation: blink 1.2s infinite; }
+        .blink-yellow { background-color: #facc15; animation: blink 1.4s infinite; }
+        .blink-green { background-color: #4ade80; animation: blink 1.6s infinite; }
+
+        @keyframes blink { 50% { opacity: 0.4; } }
+
+    </style>
+</head>
+<body>
+    <div class="w-full max-w-sm flex justify-center items-center gap-4 mb-4">
+        <button id="lang-switch-btn" class="px-4 py-2 bg-white rounded-full shadow-md text-2xl">🇮🇹</button>
+        <button id="api-settings-btn" class="px-4 py-2 bg-white rounded-full shadow-md text-2xl" title="API Settings">⚙️</button>
+        <button id="info-btn" class="px-4 py-2 bg-white rounded-full shadow-md text-2xl" title="Informazioni">ℹ️</button>
+        <div id="notification-light" title="Stato Alimenti"></div>
+    </div>
+
+    <div class="fridge-container">
+        <div class="fridge-door">
+             <div class="absolute inset-0 p-8">
+                 <div style="position: relative; width: 100%; height: 100%; box-shadow: 0 2px 8px 0 rgba(63,69,81,0.16); overflow: hidden; border-radius: 8px; will-change: transform;">
+                    <iframe loading="lazy" style="position: absolute; width: 100%; height: 100%; top: 0; left: 0; border: none; padding: 0;margin: 0; pointer-events: none;"
+                       src="https://www.canva.com/design/DAG0AaUWNH0/lhKlPdQ82bJckAZnxBe1lw/view?embed" allowfullscreen="allowfullscreen" allow="fullscreen">
+                    </iframe>
+                 </div>
+            </div>
+        </div>
+        <div class="handle" id="fridge-handle"></div>
+        <div class="fridge-light"></div>
+        <div class="fridge-interior hidden">
+            <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; border-radius: 1.25rem; overflow: hidden;">
+                <iframe loading="lazy" style="position: absolute; width: 100%; height: 100%; top: 0; left: 0; border: none; padding: 0; margin: 0;"
+                   src="https://www.canva.com/design/DAG0AWiWwjc/gxtwC3HBUfNb_DEH4Notng/view?embed" allowfullscreen="allowfullscreen" allow="fullscreen">
+                </iframe>
+            </div>
+            <div style="position: relative; z-index: 1; height: 100%; display: flex; flex-direction: column;">
+                <h2 class="text-2xl font-bold text-center text-black" data-lang-key="fridgeContents"></h2>
+                <div id="score-container" class="text-center mb-2">
+                    <span data-lang-key="scoreLabel" class="text-black"></span><span class="text-black">: </span><span id="waste-score" class="font-bold text-2xl">0</span>
+                </div>
+                <div class="item-list-container">
+                    <div class="shelf" id="item-list"></div>
+                </div>
+                <div class="p-2 space-y-2 mt-2">
+                     <button class="btn w-full" id="recipe-generator-btn" data-lang-key="recipes"></button>
+                     <button class="btn w-full" id="add-item-btn" data-lang-key="addFood"></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="add-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="text-2xl font-bold" data-lang-key="addModalTitle"></h3>
+                <button class="close-btn" data-modal="add-modal">&times;</button>
+            </div>
+            <form id="add-form" class="space-y-4">
+                <input type="text" id="food-name" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-400">
+                <input type="date" id="expiry-date" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-400">
+                <button type="submit" class="btn w-full" data-lang-key="addBtn"></button>
+            </form>
+        </div>
+    </div>
+
+    <div id="edit-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="text-2xl font-bold" data-lang-key="editModalTitle"></h3>
+                <button class="close-btn" data-modal="edit-modal">&times;</button>
+            </div>
+            <form id="edit-form" class="space-y-4">
+                <input type="hidden" id="edit-food-index">
+                <input type="text" id="edit-food-name" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-400">
+                <input type="date" id="edit-expiry-date" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-400">
+                <button type="submit" class="btn w-full bg-yellow-500 hover:bg-yellow-600" data-lang-key="saveChangesBtn"></button>
+            </form>
+        </div>
+    </div>
+
+    <div id="advice-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="text-2xl font-bold" data-lang-key="adviceModalTitle"></h3>
+                <button class="close-btn" data-modal="advice-modal">&times;</button>
+            </div>
+            <div id="advice-content" class="advice-box text-sm space-y-2"></div>
+        </div>
+    </div>
+
+    <div id="recipe-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="text-2xl font-bold" data-lang-key="recipeModalTitle"></h3>
+                <button class="close-btn" data-modal="recipe-modal">&times;</button>
+            </div>
+            <div id="recipe-content" class="recipe-box text-sm space-y-2"></div>
+        </div>
+    </div>
+    
+    <div id="api-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="text-2xl font-bold" data-lang-key="apiModalTitle"></h3>
+                <button class="close-btn" data-modal="api-modal">&times;</button>
+            </div>
+            <form id="api-form" class="space-y-4">
+                <p class="text-sm text-gray-600" data-lang-key="apiModalText"></p>
+                <input type="password" id="api-key-input" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-400" placeholder="Incolla la tua chiave API qui">
+                <button type="submit" class="btn w-full bg-purple-500 hover:bg-purple-600" data-lang-key="saveBtn"></button>
+            </form>
+        </div>
+    </div>
+
+    <div id="info-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="text-2xl font-bold" data-lang-key="infoModalTitle"></h3>
+                <button class="close-btn" data-modal="info-modal">&times;</button>
+            </div>
+            <div id="info-content" class="text-sm space-y-4"></div>
+        </div>
+    </div>
+
+    <div id="notification-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="text-2xl font-bold" data-lang-key="notificationModalTitle"></h3>
+                <button class="close-btn" data-modal="notification-modal">&times;</button>
+            </div>
+            <div id="notification-content" class="text-sm space-y-4"></div>
+        </div>
+    </div>
+
+    <div id="message-box" class="message-box"><p id="message-text"></p></div>
+
+    <script>
+        // DOM Elements
+        const fridgeDoor = document.querySelector('.fridge-door');
+        const fridgeInterior = document.querySelector('.fridge-interior');
+        const fridgeLight = document.querySelector('.fridge-light');
+        const modals = Array.from(document.querySelectorAll('.modal-overlay'));
+        const addForm = document.getElementById('add-form');
+        const foodNameInput = document.getElementById('food-name');
+        const expiryDateInput = document.getElementById('expiry-date');
+        const editModal = document.getElementById('edit-modal');
+        const editForm = document.getElementById('edit-form');
+        const editFoodNameInput = document.getElementById('edit-food-name');
+        const editExpiryDateInput = document.getElementById('edit-expiry-date');
+        const editFoodIndexInput = document.getElementById('edit-food-index');
+        const itemList = document.getElementById('item-list');
+        const adviceContent = document.getElementById('advice-content');
+        const recipeContent = document.getElementById('recipe-content');
+        const messageBox = document.getElementById('message-box');
+        const messageText = document.getElementById('message-text');
+        const langSwitchBtn = document.getElementById('lang-switch-btn');
+        const fridgeHandle = document.getElementById('fridge-handle');
+        const addItemBtn = document.getElementById('add-item-btn');
+        const recipeGeneratorBtn = document.getElementById('recipe-generator-btn');
+        const wasteScoreEl = document.getElementById('waste-score');
+        const apiSettingsBtn = document.getElementById('api-settings-btn');
+        const apiModal = document.getElementById('api-modal');
+        const apiForm = document.getElementById('api-form');
+        const apiKeyInput = document.getElementById('api-key-input');
+        const infoBtn = document.getElementById('info-btn');
+        const infoModal = document.getElementById('info-modal');
+        const infoContent = document.getElementById('info-content');
+        const notificationLight = document.getElementById('notification-light');
+        const notificationModal = document.getElementById('notification-modal');
+        const notificationContent = document.getElementById('notification-content');
+
+
+        // State
+        let foods = JSON.parse(localStorage.getItem('fridgeFoods')) || [];
+        let antiWasteScore = parseInt(localStorage.getItem('antiWasteScore')) || 0;
+        let selectedFoods = [];
+        let currentLanguage = localStorage.getItem('fridgeLang') || 'it';
+        
+        const translations = {
+            it: {
+                fridgeContents: "Contenuto del Frigo", addFood: "Aggiungi Alimento ➕",
+                recipes: "Genera Ricette 🍳",
+                addModalTitle: "Aggiungi Alimento", foodNamePlaceholder: "Nome Alimento",
+                addBtn: "Aggiungi", adviceModalTitle: "Consigli Anti-Spreco",
+                recipeModalTitle: "Ricette Generate",
+                emptyFridge: "Il frigo è vuoto.", expires: "Scadenza:",
+                adviceLoading: "L'IA sta pensando a un consiglio...", recipeLoading: "L'IA sta cucinando una ricetta...",
+                selectFoodForRecipe: "Seleziona uno o più alimenti freschi per generare una ricetta.",
+                specificAdviceTitle: (food) => `Consigli per riutilizzare: ${food}`,
+                apiError: "Errore: l'IA non è disponibile o la chiave API non è valida. Riprova più tardi.",
+                useTitle: "Utilizza", throwTitle: "Butta", recycleTitle: "Ricicla",
+                scoreLabel: "Punteggio Anti-Spreco",
+                editModalTitle: "Modifica Alimento", saveChangesBtn: "Salva Modifiche", editTitle: "Modifica",
+                apiModalTitle: "Impostazioni Chiave API",
+                apiModalText: "Inserisci la tua chiave API personale di Google Gemini per attivare le funzioni IA. La chiave verrà salvata solo nel tuo browser.",
+                apiKeyNeeded: "Per favore, imposta prima la tua chiave API Gemini.",
+                apiKeySaved: "Chiave API salvata!",
+                saveBtn: "Salva",
+                infoModalTitle: "Informazioni sull'App",
+                infoModalContent: `
+                    <h4 class="font-bold text-lg">Come Funziona l'App</h4>
+                    <p>Questa app ti aiuta a ridurre gli sprechi alimentari. Aggiungi il cibo che compri, e l'app ti ricorderà le scadenze con un sistema di colori intuitivo. Guadagni punti anti-spreco quando "Utilizzi" (🍽️) o "Ricicli" (♻️) il cibo, e li perdi quando lo "Butti" (🗑️).</p>
+                    <p>Puoi anche selezionare gli alimenti per generare ricette (🍳) o ottenere consigli su come riutilizzare i prodotti scaduti (💡) usando l'intelligenza artificiale di Google Gemini.</p>
+                    <h4 class="font-bold text-lg mt-4">Come Ottenere una Chiave API Gemini (Gratuita)</h4>
+                    <p>Per usare le funzioni di IA, hai bisogno di una chiave API gratuita da Google AI Studio:</p>
+                    <ol class="list-decimal list-inside space-y-2">
+                        <li>Vai su <a href="https://aistudio.google.com/" target="_blank" class="text-blue-500 hover:underline">Google AI Studio</a>.</li>
+                        <li>Accedi con il tuo Account Google.</li>
+                        <li>Nel menù a sinistra, clicca su <strong>"Get API key"</strong>.</li>
+                        <li>Clicca su <strong>"Create API key in new project"</strong>.</li>
+                        <li>Copia la chiave generata.</li>
+                        <li>Torna qui, clicca sull'icona delle impostazioni (⚙️) e incolla la chiave.</li>
+                    </ol>
+                    <p class="mt-2 text-xs">L'uso della chiave API di Gemini ha un generoso piano gratuito, perfetto per l'uso personale in questa applicazione.</p>
+                `,
+                notificationModalTitle: "Riepilogo Stato Alimenti",
+                notifyExpired: "Scaduti:",
+                notifyExpiringToday: "In Scadenza Oggi:",
+                notifyExpiringSoon: "In Scadenza a Breve:",
+                notifyFresh: "Tutto Fresco!",
+                notifyNoItems: "Nessun alimento nel frigo.",
+            },
+            en: {
+                fridgeContents: "Fridge Contents", addFood: "Add Food ➕",
+                recipes: "Generate Recipes 🍳",
+                addModalTitle: "Add Food", foodNamePlaceholder: "Food Name", 
+                addBtn: "Add", adviceModalTitle: "Anti-Waste Tips",
+                recipeModalTitle: "Generated Recipes",
+                emptyFridge: "The fridge is empty.", expires: "Expires:",
+                adviceLoading: "The AI is thinking of a tip...", recipeLoading: "The AI is cooking up a recipe...",
+                selectFoodForRecipe: "Select one or more fresh items to generate a recipe.",
+                specificAdviceTitle: (food) => `Reuse tips for: ${food}`,
+                apiError: "Error: The AI is unavailable or the API key is invalid. Please try again later.",
+                useTitle: "Use", throwTitle: "Throw", recycleTitle: "Recycle",
+                scoreLabel: "Anti-Waste Score",
+                editModalTitle: "Edit Item", saveChangesBtn: "Save Changes", editTitle: "Edit",
+                apiModalTitle: "API Key Settings",
+                apiModalText: "Enter your personal Google Gemini API key to enable AI features. Your key will be saved only in your browser.",
+                apiKeyNeeded: "Please set your Gemini API key first.",
+                apiKeySaved: "API Key saved!",
+                saveBtn: "Save",
+                infoModalTitle: "About the App",
+                infoModalContent: `
+                    <h4 class="font-bold text-lg">How the App Works</h4>
+                    <p>This app helps you reduce food waste. Add the food you buy, and the app will remind you of expiration dates with an intuitive color system. You earn anti-waste points when you "Use" (🍽️) or "Recycle" (♻️) food, and you lose them when you "Throw" it away (🗑️).</p>
+                    <p>You can also select food items to generate recipes (🍳) or get tips on how to reuse expired products (💡) using Google's Gemini AI.</p>
+                    <h4 class="font-bold text-lg mt-4">How to Get a Gemini API Key (Free)</h4>
+                    <p>To use the AI features, you need a free API key from Google AI Studio:</p>
+                    <ol class="list-decimal list-inside space-y-2">
+                        <li>Go to <a href="https://aistudio.google.com/" target="_blank" class="text-blue-500 hover:underline">Google AI Studio</a>.</li>
+                        <li>Sign in with your Google Account.</li>
+                        <li>In the left menu, click on <strong>"Get API key"</strong>.</li>
+                        <li>Click on <strong>"Create API key in new project"</strong>.</li>
+                        <li>Copy the generated key.</li>
+                        <li>Come back here, click the settings icon (⚙️), and paste the key.</li>
+                    </ol>
+                    <p class="mt-2 text-xs">The use of the Gemini API key has a generous free tier, perfect for personal use in this application.</p>
+                `,
+                notificationModalTitle: "Food Status Summary",
+                notifyExpired: "Expired:",
+                notifyExpiringToday: "Expiring Today:",
+                notifyExpiringSoon: "Expiring Soon:",
+                notifyFresh: "Everything is Fresh!",
+                notifyNoItems: "No items in the fridge.",
+            }
+        };
+
+        function switchLanguage(lang) {
+            currentLanguage = lang;
+            localStorage.setItem('fridgeLang', lang);
+            langSwitchBtn.textContent = lang === 'it' ? '🇮🇹' : '🇬🇧';
+            document.querySelectorAll('[data-lang-key]').forEach(el => {
+                const key = el.dataset.langKey;
+                const translation = translations[lang][key];
+                if (translation && typeof translation === 'string') {
+                    el.textContent = translation;
+                }
+            });
+            foodNameInput.placeholder = translations[lang].foodNamePlaceholder;
+            infoContent.innerHTML = translations[lang].infoModalContent;
+            renderFoods();
+        }
+
+        function showMessage(text) {
+            messageText.textContent = text;
+            messageBox.style.display = 'block';
+            setTimeout(() => { messageBox.style.display = 'none'; }, 2000);
+        }
+
+        function setScoreColor(score) {
+            wasteScoreEl.classList.remove('text-red-600', 'text-green-600', 'text-black');
+            if (score < 0) {
+                wasteScoreEl.classList.add('text-red-600');
+            } else if (score > 0) {
+                wasteScoreEl.classList.add('text-green-600');
+            } else {
+                wasteScoreEl.classList.add('text-black');
+            }
+        }
+
+        function updateScore(points) {
+            antiWasteScore += points;
+            localStorage.setItem('antiWasteScore', antiWasteScore);
+            wasteScoreEl.textContent = antiWasteScore;
+            setScoreColor(antiWasteScore);
+        }
+
+        async function translateToEnglish(text) {
+            const dictionary = { "mela": "apple", "latte": "milk", "carota": "carrot", "pomodoro": "tomato", "pane": "bread", "pollo": "chicken", "patata": "potato", "prosciutto": "ham", "uovo": "egg" };
+            return dictionary[text.toLowerCase()] || text;
+        }
+        
+        function getDayDiff(expiryDateStr) {
+            const [y, m, d] = expiryDateStr.split('-').map(Number);
+            const expiryDate = new Date(Date.UTC(y, m - 1, d));
+            const today = new Date();
+            const todayUTC = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+            const timeDiff = expiryDate.getTime() - todayUTC.getTime();
+            return Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+        }
+
+        function updateNotificationLight() {
+            notificationLight.className = 'on'; // Reset classes
+            if (foods.length === 0) {
+                notificationLight.classList.remove('on');
+                return;
+            }
+
+            let hasExpired = false;
+            let hasExpiringToday = false;
+            let hasExpiringSoon = false;
+
+            foods.forEach(food => {
+                const dayDiff = getDayDiff(food.expiryDate);
+                if (dayDiff < 0) hasExpired = true;
+                else if (dayDiff === 0) hasExpiringToday = true;
+                else if (dayDiff <= 2) hasExpiringSoon = true;
+            });
+
+            if (hasExpired) {
+                notificationLight.classList.add('blink-red');
+            } else if (hasExpiringToday) {
+                notificationLight.classList.add('blink-orange');
+            } else if (hasExpiringSoon) {
+                notificationLight.classList.add('blink-yellow');
+            } else {
+                notificationLight.classList.add('blink-green');
+            }
+            notificationLight.classList.add('on');
+        }
+
+        function renderFoods() {
+            itemList.innerHTML = '';
+            if (foods.length === 0) {
+                itemList.innerHTML = `<p class="text-center text-gray-500 font-bold mt-4">${translations[currentLanguage].emptyFridge}</p>`;
+                updateNotificationLight();
+                return;
+            }
+
+            foods.sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate));
+
+            foods.forEach((food, index) => {
+                const dayDiff = getDayDiff(food.expiryDate);
+                
+                let stateClass = '';
+                if (dayDiff < 0) {
+                    stateClass = 'expired';
+                } else if (dayDiff === 0) {
+                    stateClass = 'expiring-today';
+                } else if (dayDiff <= 2) {
+                    stateClass = 'expiring-soon';
+                } else {
+                    stateClass = 'fresh';
+                }
+
+                const isExpired = dayDiff < 0;
+                const selectedClass = selectedFoods.includes(food.name) ? 'selected' : '';
+                const itemHtml = `
+                    <div class="food-item ${stateClass} ${selectedClass}" data-index="${index}" data-name="${food.name}" data-expired="${isExpired}">
+                        <div>
+                            <p class="font-bold">${food.name}</p>
+                            <p class="text-sm text-gray-600">${translations[currentLanguage].expires} ${food.expiryDate}</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                             <button class="edit-btn bg-gray-300 text-gray-800 w-8 h-8 rounded-full text-lg flex items-center justify-center hover:bg-gray-400" title="${translations[currentLanguage].editTitle}">✏️</button>
+                             ${isExpired ? `<button class="advice-btn bg-yellow-400 text-gray-800 w-8 h-8 rounded-full text-lg flex items-center justify-center hover:bg-yellow-500" title="Get advice">💡</button>` : ''}
+    
+                            ${isExpired ? 
+                                `<button class="delete-btn bg-green-500 text-white w-8 h-8 rounded-full text-lg flex items-center justify-center hover:bg-green-600" title="${translations[currentLanguage].recycleTitle}" data-action="recycle">♻️</button>`
+                                :
+                                `<button class="delete-btn bg-blue-500 text-white w-8 h-8 rounded-full text-lg flex items-center justify-center hover:bg-blue-600" title="${translations[currentLanguage].useTitle}" data-action="use">🍽️</button>`
+                            }
+
+                            <button class="delete-btn bg-gray-600 text-white w-8 h-8 rounded-full text-lg flex items-center justify-center hover:bg-gray-700" title="${translations[currentLanguage].throwTitle}" data-action="throw">🗑️</button>
+                        </div>
+                    </div>`;
+                itemList.insertAdjacentHTML('beforeend', itemHtml);
+            });
+            updateNotificationLight();
+        }
+        
+        function saveFoods() {
+            localStorage.setItem('fridgeFoods', JSON.stringify(foods));
+            renderFoods();
+        }
+
+        function toggleFridgeDoor() {
+            const isOpen = fridgeDoor.classList.toggle('open');
+            fridgeLight.classList.toggle('on', isOpen);
+            if (isOpen) {
+                fridgeInterior.classList.remove('hidden');
+            } else {
+                setTimeout(() => fridgeInterior.classList.add('hidden'), 500);
+            }
+        }
+        
+        async function callGeminiAPI(prompt, maxRetries = 3) {
+            const apiKey = localStorage.getItem('geminiApiKey') || "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+            const payload = { contents: [{ parts: [{ text: prompt }] }] };
+            let delay = 1000;
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
+                    const result = await response.json();
+                    const candidate = result.candidates?.[0];
+                    if (candidate && candidate.content?.parts?.[0]?.text) {
+                        return candidate.content.parts[0].text;
+                    } else {
+                        throw new Error('Invalid response structure from API');
+                    }
+                } catch (error) {
+                    console.warn(`API call attempt ${i + 1} failed. Retrying...`, error);
+                    if (i === maxRetries - 1) return null;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2;
+                }
+            }
+            return null;
+        }
+        
+        async function getAIAdvice(foodName) {
+            const apiKey = localStorage.getItem('geminiApiKey');
+            if (!apiKey) {
+                apiModal.style.display = 'flex';
+                showMessage(translations[currentLanguage].apiKeyNeeded);
+                return;
+            }
+
+            const adviceModal = modals.find(m => m.id === 'advice-modal');
+            adviceModal.style.display = 'flex';
+            adviceContent.innerHTML = `<div class="loading mx-auto"></div><p class="text-center text-gray-600">${translations[currentLanguage].adviceLoading}</p>`;
+            const promptLang = {
+                it: `L'alimento '${foodName}' è scaduto e non è più commestibile. Fornisci 2-3 brevi consigli creativi, in una lista puntata, su come riutilizzarlo in modo non alimentare (es. compost, pulizia, arte, ecc.). Sii conciso.`,
+                en: `The food item '${foodName}' has expired and is no longer edible. Provide 2-3 short, creative tips, in a bulleted list, on how to reuse it in a non-food way (e.g., compost, cleaning, art, etc.). Be concise.`
+            };
+            const adviceText = await callGeminiAPI(promptLang[currentLanguage]);
+            if (!adviceText) {
+                adviceContent.innerHTML = `<p>${translations[currentLanguage].apiError}</p>`;
+                return;
+            }
+            const formattedAdvice = adviceText.replace(/(\* |- )/g, '<li class="ml-4 list-disc">').replace(/\n/g, '<br>');
+            adviceContent.innerHTML = `<p><strong>${translations[currentLanguage].specificAdviceTitle(foodName)}</strong></p><ul class="mt-2 space-y-1">${formattedAdvice}</ul>`;
+        }
+
+        async function getAIRecipe(ingredients) {
+             const apiKey = localStorage.getItem('geminiApiKey');
+            if (!apiKey) {
+                apiModal.style.display = 'flex';
+                showMessage(translations[currentLanguage].apiKeyNeeded);
+                return;
+            }
+
+            const recipeModal = modals.find(m => m.id === 'recipe-modal');
+            recipeModal.style.display = 'flex';
+            recipeContent.innerHTML = `<div class="loading mx-auto"></div><p class="text-center text-gray-600">${translations[currentLanguage].recipeLoading}</p>`;
+            const ingredientList = ingredients.join(', ');
+            const promptLang = {
+                it: `Crea una ricetta semplice e gustosa usando principalmente questi ingredienti: ${ingredientList}. Fornisci un titolo per la ricetta, una lista di ingredienti (puoi aggiungere ingredienti base come olio, sale, pepe), e le istruzioni passo-passo. Formatta la risposta con un titolo in grassetto, la sezione "**Ingredienti:**", e la sezione "**Istruzioni:**".`,
+                en: `Create a simple and tasty recipe primarily using these ingredients: ${ingredientList}. Provide a title for the recipe, a list of ingredients (you can add basic ingredients like oil, salt, pepper), and step-by-step instructions. Format the response with a bolded title, an "**Ingredients:**" section, and an "**Instructions:**" section.`
+            };
+            const recipeText = await callGeminiAPI(promptLang[currentLanguage]);
+             if (!recipeText) {
+                recipeContent.innerHTML = `<p>${translations[currentLanguage].apiError}</p>`;
+                return;
+            }
+            const formattedRecipe = recipeText
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\n/g, '<br>');
+            recipeContent.innerHTML = `<div class="space-y-2">${formattedRecipe}</div>`;
+        }
+        
+        // Event Listeners
+        fridgeHandle.addEventListener('click', toggleFridgeDoor);
+        fridgeDoor.addEventListener('click', toggleFridgeDoor);
+        addItemBtn.addEventListener('click', () => { modals.find(m => m.id === 'add-modal').style.display = 'flex'; });
+        recipeGeneratorBtn.addEventListener('click', () => {
+            if (selectedFoods.length === 0) {
+                showMessage(translations[currentLanguage].selectFoodForRecipe); return;
+            }
+            getAIRecipe(selectedFoods);
+        });
+        langSwitchBtn.addEventListener('click', () => switchLanguage(currentLanguage === 'it' ? 'en' : 'it'));
+        modals.forEach(modal => { modal.querySelector('.close-btn').addEventListener('click', () => { modal.style.display = 'none'; }); });
+        addForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const foodName = foodNameInput.value.trim();
+            if (!foodName || !expiryDateInput.value) return;
+            foods.push({ name: foodName, englishName: await translateToEnglish(foodName), expiryDate: expiryDateInput.value });
+            saveFoods();
+            modals.find(m => m.id === 'add-modal').style.display = 'none';
+            addForm.reset();
+        });
+
+        editForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const index = parseInt(editFoodIndexInput.value);
+            const newName = editFoodNameInput.value.trim();
+            const newDate = editExpiryDateInput.value;
+            if (newName && newDate && index >= 0 && foods[index]) {
+                foods[index].name = newName;
+                foods[index].englishName = await translateToEnglish(newName);
+                foods[index].expiryDate = newDate;
+                saveFoods();
+                editModal.style.display = 'none';
+            }
+        });
+        
+        itemList.addEventListener('click', e => {
+            const foodItem = e.target.closest('.food-item');
+            if (!foodItem) return;
+            
+            const index = parseInt(foodItem.dataset.index);
+            const food = foods[index];
+            if (!food) return;
+
+            const deleteButton = e.target.closest('.delete-btn');
+            const adviceButton = e.target.closest('.advice-btn');
+            const editButton = e.target.closest('.edit-btn');
+
+            if (editButton) {
+                editFoodIndexInput.value = index;
+                editFoodNameInput.value = food.name;
+                editExpiryDateInput.value = food.expiryDate;
+                editModal.style.display = 'flex';
+                return;
+            }
+
+            if (deleteButton) {
+                const action = deleteButton.dataset.action;
+                if (action === 'use' || action === 'recycle') {
+                    updateScore(5);
+                } else if (action === 'throw') {
+                    updateScore(-10);
+                }
+
+                const selectedIndex = selectedFoods.indexOf(food.name);
+                if (selectedIndex > -1) selectedFoods.splice(selectedIndex, 1);
+                foods.splice(index, 1);
+                saveFoods();
+                return;
+            }
+            
+            if (adviceButton) {
+                getAIAdvice(food.name);
+                return;
+            }
+            
+            const isExpired = foodItem.dataset.expired === 'true';
+            if (!isExpired) {
+                const selectedIndex = selectedFoods.indexOf(food.name);
+                if (selectedIndex > -1) {
+                    selectedFoods.splice(selectedIndex, 1);
+                } else {
+                    selectedFoods.push(food.name);
+                }
+                foodItem.classList.toggle('selected');
+            }
+        });
+        
+        apiSettingsBtn.addEventListener('click', () => {
+            apiKeyInput.value = localStorage.getItem('geminiApiKey') || '';
+            apiModal.style.display = 'flex';
+        });
+
+        apiForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const apiKey = apiKeyInput.value.trim();
+            localStorage.setItem('geminiApiKey', apiKey);
+            apiModal.style.display = 'none';
+            showMessage(translations[currentLanguage].apiKeySaved);
+        });
+
+        infoBtn.addEventListener('click', () => {
+            infoModal.style.display = 'flex';
+        });
+
+        notificationLight.addEventListener('click', () => {
+            if (foods.length === 0) return;
+            
+            let html = '';
+            const expired = foods.filter(f => getDayDiff(f.expiryDate) < 0);
+            const expiringToday = foods.filter(f => getDayDiff(f.expiryDate) === 0);
+            const expiringSoon = foods.filter(f => getDayDiff(f.expiryDate) > 0 && getDayDiff(f.expiryDate) <= 2);
+            const fresh = foods.filter(f => getDayDiff(f.expiryDate) > 2);
+
+            if (expired.length > 0) {
+                html += `<h4 class="font-bold text-red-600">${translations[currentLanguage].notifyExpired}</h4><ul class="list-disc list-inside">`;
+                expired.forEach(f => { html += `<li>${f.name} (${f.expiryDate})</li>`; });
+                html += `</ul>`;
+            }
+            if (expiringToday.length > 0) {
+                html += `<h4 class="font-bold text-orange-500 mt-2">${translations[currentLanguage].notifyExpiringToday}</h4><ul class="list-disc list-inside">`;
+                expiringToday.forEach(f => { html += `<li>${f.name} (${f.expiryDate})</li>`; });
+                html += `</ul>`;
+            }
+            if (expiringSoon.length > 0) {
+                html += `<h4 class="font-bold text-yellow-500 mt-2">${translations[currentLanguage].notifyExpiringSoon}</h4><ul class="list-disc list-inside">`;
+                expiringSoon.forEach(f => { html += `<li>${f.name} (${f.expiryDate})</li>`; });
+                html += `</ul>`;
+            }
+            if (expired.length === 0 && expiringToday.length === 0 && expiringSoon.length === 0 && fresh.length > 0) {
+                 html = `<p class="font-bold text-green-600">${translations[currentLanguage].notifyFresh}</p>`;
+            }
+            if (!html) {
+                 html = `<p>${translations[currentLanguage].notifyNoItems}</p>`;
+            }
+
+            notificationContent.innerHTML = html;
+            notificationModal.style.display = 'flex';
+        });
+
+
+        window.onload = () => {
+             wasteScoreEl.textContent = antiWasteScore;
+             setScoreColor(antiWasteScore);
+             switchLanguage(currentLanguage);
+        };
+    </script>
+</body>
+</html>
+
